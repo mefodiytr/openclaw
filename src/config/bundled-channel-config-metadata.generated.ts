@@ -8692,6 +8692,7 @@ export const GENERATED_BUNDLED_CHANNEL_CONFIG_METADATA = [
           },
         },
         textChunkLimit: {
+          default: 4000,
           type: "integer",
           exclusiveMinimum: 0,
           maximum: 9007199254740991,
@@ -8902,6 +8903,7 @@ export const GENERATED_BUNDLED_CHANNEL_CONFIG_METADATA = [
                 },
               },
               textChunkLimit: {
+                default: 4000,
                 type: "integer",
                 exclusiveMinimum: 0,
                 maximum: 9007199254740991,
@@ -8942,7 +8944,7 @@ export const GENERATED_BUNDLED_CHANNEL_CONFIG_METADATA = [
                 exclusiveMinimum: 0,
               },
             },
-            required: ["transport", "dmPolicy", "groupPolicy"],
+            required: ["transport", "dmPolicy", "groupPolicy", "textChunkLimit"],
             additionalProperties: false,
           },
         },
@@ -8950,7 +8952,7 @@ export const GENERATED_BUNDLED_CHANNEL_CONFIG_METADATA = [
           type: "string",
         },
       },
-      required: ["transport", "dmPolicy", "groupPolicy"],
+      required: ["transport", "dmPolicy", "groupPolicy", "textChunkLimit"],
       additionalProperties: false,
     },
   },
