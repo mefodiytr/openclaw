@@ -91,7 +91,7 @@ Modeled on `extensions/nextcloud-talk/package.json:1-60` (closer fit than Telegr
   },
   "type": "module",
   "dependencies": {
-    "@maxhub/max-bot-api": "^0.0.13",
+    "@maxhub/max-bot-api": "0.0.13",
     "zod": "^4.4.1"
   },
   "devDependencies": {
@@ -110,14 +110,14 @@ Modeled on `extensions/nextcloud-talk/package.json:1-60` (closer fit than Telegr
     "extensions": ["./index.ts"],
     "setupEntry": "./setup-entry.ts",
     "channel": {
-      "id": "max",
+      "id": "max-messenger",
       "label": "MAX",
       "selectionLabel": "MAX (Russian messenger)",
       "detailLabel": "MAX bot",
-      "docsPath": "/channels/max",
-      "docsLabel": "max",
+      "docsPath": "/channels/max-messenger",
+      "docsLabel": "max-messenger",
       "blurb": "Russian messenger MAX (by VK). Requires a verified Russian legal entity to register a bot at dev.max.ru.",
-      "aliases": ["max-messenger"],
+      "aliases": ["max"],
       "order": 70,
       "markdownCapable": true,
       "configuredState": {
@@ -135,18 +135,18 @@ Modeled on `extensions/nextcloud-talk/package.json:1-60` (closer fit than Telegr
 
 Key choices and references:
 - `name: "@openclaw/max"` — same convention as `extensions/nextcloud-talk/package.json:2`.
-- `dependencies`: only `@maxhub/max-bot-api` (transport) and `zod` (config schema, same as nextcloud-talk). No grammy fork because the MAX SDK is its own thing.
+- `dependencies`: `@maxhub/max-bot-api` is pinned exact at `0.0.13` (no caret) per §8 decision #9 — SDK is pre-1.0 and every minor is a potential breaking change. Plus `zod` (config schema, same as nextcloud-talk). No grammy fork because the MAX SDK is its own thing.
 - `openclaw.extensions: ["./index.ts"]` — required for plugin loader (see `extensions/CLAUDE.md` "Boundary Rules"). All bundled plugins use this pattern; see `extensions/telegram/package.json:18-20`.
 - `openclaw.setupEntry: "./setup-entry.ts"` — required so `openclaw channels list` and `status` can read MAX metadata before runtime loads (see `docs/plugins/sdk-channel-plugins.md:160-164`).
-- `openclaw.channel.id: "max"` — primary channel id. Becomes `channels.max.*` in user config.
-- `openclaw.channel.aliases: ["max-messenger"]` — accepted by target prefix parsing (mirrors nextcloud-talk's `["nc-talk", "nc"]`, `extensions/nextcloud-talk/package.json:38-40`).
+- `openclaw.channel.id: "max-messenger"` — primary channel id (per §8 decision #2). Becomes `channels.max-messenger.*` in user config.
+- `openclaw.channel.aliases: ["max"]` — short alias accepted by target prefix parsing (mirrors nextcloud-talk's `["nc-talk", "nc"]`, `extensions/nextcloud-talk/package.json:38-40`).
 - `openclaw.channel.configuredState.env.allOf` — env presence enables a quick "configured" answer without reading config (see `extensions/telegram/package.json:46-50`).
 - `openclaw.compat.pluginApi: ">=2026.5.3"` — gate against older host (mirrors nextcloud-talk).
 
 Skipped vs Telegram:
 - `setupFeatures.legacyStateMigrations` — not needed; we have no prior state to migrate.
 - `setupFeatures.configPromotion` — defer until Phase 3+ when env-driven onboarding becomes useful.
-- `install.npmSpec` and `release.publishToClawHub` — defer until upstream contribution decision is made.
+- `install.npmSpec` and `release.publishToClawHub` — Phase 1 omits these (per §8 decision #10). Phase 5+ adds `install.npmSpec` pointing at `@bccontrol/openclaw-max-messenger` once the standalone npm release lands.
 
 ### 2.2 `extensions/max/openclaw.plugin.json`
 
@@ -154,11 +154,11 @@ Modeled on `extensions/telegram/openclaw.plugin.json:1-15`.
 
 ```json
 {
-  "id": "max",
+  "id": "max-messenger",
   "activation": { "onStartup": false },
-  "channels": ["max"],
+  "channels": ["max-messenger"],
   "channelEnvVars": {
-    "max": ["MAX_BOT_TOKEN"]
+    "max-messenger": ["MAX_BOT_TOKEN"]
   },
   "configSchema": {
     "type": "object",
@@ -170,9 +170,9 @@ Modeled on `extensions/telegram/openclaw.plugin.json:1-15`.
 
 Notes:
 - `activation.onStartup: false` — channel only starts when an account is configured; matches `extensions/telegram/openclaw.plugin.json:3-5` and `extensions/nextcloud-talk/openclaw.plugin.json:3-5`.
-- `channels: ["max"]` — discovery-time channel id list.
-- `channelEnvVars.max: ["MAX_BOT_TOKEN"]` — generic startup paths can reason about env-driven configuration without loading runtime (see `docs/plugins/sdk-channel-plugins.md:154-157`).
-- `configSchema` stays empty: the channel-specific schema lives at `channels.max.*` and is provided by `buildChannelConfigSchema(MaxConfigSchema)` inside `src/channel.ts`. See `extensions/nextcloud-talk/src/channel.ts:83`. (The newer pattern in `docs/plugins/sdk-channel-plugins.md:333-368` would also accept a `channelConfigs.max.schema` block here, but no bundled channel uses it yet — sticking with the in-code schema keeps consistency with telegram/nextcloud-talk.)
+- `channels: ["max-messenger"]` — discovery-time channel id list (the alias `"max"` is declared in `package.json` `openclaw.channel.aliases`, not here).
+- `channelEnvVars["max-messenger"]: ["MAX_BOT_TOKEN"]` — generic startup paths can reason about env-driven configuration without loading runtime (see `docs/plugins/sdk-channel-plugins.md:154-157`).
+- `configSchema` stays empty: the channel-specific schema lives at `channels.max-messenger.*` and is provided by `buildChannelConfigSchema(MaxConfigSchema)` inside `src/channel.ts`. See `extensions/nextcloud-talk/src/channel.ts:83`. (The newer pattern in `docs/plugins/sdk-channel-plugins.md:333-368` would also accept a `channelConfigs["max-messenger"].schema` block here, but no bundled channel uses it yet — sticking with the in-code schema keeps consistency with telegram/nextcloud-talk.)
 
 ### 2.3 `extensions/max/tsconfig.json`
 
@@ -195,10 +195,10 @@ The adapters we need to fill in for MAX (Phase 1 minimum bolded):
 
 | Adapter | Phase | Source of truth in this repo |
 |---|---|---|
-| **`id: "max"`** | 1 | `extensions/nextcloud-talk/src/channel.ts:71` |
+| **`id: "max-messenger"`** | 1 | `extensions/nextcloud-talk/src/channel.ts:71` |
 | **`meta`** (label/docsPath/blurb) | 1 | `extensions/nextcloud-talk/src/channel.ts:34-44` |
 | **`capabilities`** | 1 | `extensions/nextcloud-talk/src/channel.ts:74-81` |
-| **`reload.configPrefixes: ["channels.max"]`** | 1 | `extensions/nextcloud-talk/src/channel.ts:82` |
+| **`reload.configPrefixes: ["channels.max-messenger"]`** | 1 | `extensions/nextcloud-talk/src/channel.ts:82` |
 | **`configSchema: buildChannelConfigSchema(MaxConfigSchema)`** | 1 | `extensions/nextcloud-talk/src/channel.ts:83` |
 | **`config: ChannelConfigAdapter`** | 1 | `extensions/nextcloud-talk/src/channel.ts:84-96` (via `nextcloudTalkConfigAdapter` in `channel.adapters.ts`) |
 | **`messaging: ChannelMessagingAdapter`** | 1 | `extensions/nextcloud-talk/src/channel.ts:121-129` |
@@ -355,7 +355,7 @@ export type MaxAccountConfig = {
   /** Per-DM overrides keyed by user id. */
   dms?: Record<string, DmConfig>;
 
-  /** Outbound text chunk size (chars). MAX limit is roughly 4000; verify (open question). Default: 4000. */
+  /** Outbound text chunk size (chars). Default: 4000 (constant `MAX_TEXT_CHUNK_LIMIT` in code; per §8 decision #6 — unverified upstream limit, revisit after first empirical smoke test). */
   textChunkLimit?: number;
   /** Disable block streaming for MAX (recommended initially: true). */
   blockStreaming?: boolean;
@@ -374,7 +374,7 @@ type MaxConfig = {
 } & MaxAccountConfig;
 
 export type CoreConfig = {
-  channels?: { max?: MaxConfig };
+  channels?: { ["max-messenger"]?: MaxConfig };
   [key: string]: unknown;
 };
 ```
@@ -424,7 +424,7 @@ const MaxAccountSchemaBase = z
 
 const MaxAccountSchema = MaxAccountSchemaBase.superRefine((value, ctx) => {
   requireChannelOpenAllowFrom({
-    channel: "max",
+    channel: "max-messenger",
     policy: value.dmPolicy,
     allowFrom: value.allowFrom,
     ctx,
@@ -433,7 +433,7 @@ const MaxAccountSchema = MaxAccountSchemaBase.superRefine((value, ctx) => {
   if (value.transport === "webhook" && !value.webhookUrl) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
-      message: "channels.max: webhookUrl is required when transport is 'webhook'.",
+      message: "channels.max-messenger: webhookUrl is required when transport is 'webhook'.",
       path: ["webhookUrl"],
     });
   }
@@ -444,7 +444,7 @@ export const MaxConfigSchema = MaxAccountSchemaBase.extend({
   defaultAccount: z.string().optional(),
 }).superRefine((value, ctx) => {
   requireChannelOpenAllowFrom({
-    channel: "max",
+    channel: "max-messenger",
     policy: value.dmPolicy,
     allowFrom: value.allowFrom,
     ctx,
@@ -472,17 +472,17 @@ Top-level config example users will write into `~/.openclaw/openclaw.json`:
 ```jsonc
 {
   "channels": {
-    "max": {
+    "max-messenger": {
       // Single-account form (Phase 1 MVP)
-      "tokenFile": "~/.openclaw/credentials/max-bcai.token",
+      "tokenFile": "~/.openclaw/credentials/max-messenger-bcai.token",
       "transport": "polling",
-      "dmPolicy": "allowlist",
+      "dmPolicy": "pairing",
       "allowFrom": ["12345678"],
 
       // Multi-account form (Phase 5)
       "accounts": {
-        "bcai": { "tokenFile": "~/.openclaw/credentials/max-bcai.token" },
-        "test": { "token": "$MAX_BOT_TOKEN_TEST", "transport": "webhook", "webhookUrl": "https://example.com/max-test" }
+        "bcai": { "tokenFile": "~/.openclaw/credentials/max-messenger-bcai.token" },
+        "test": { "token": "$MAX_BOT_TOKEN_TEST", "transport": "webhook", "webhookUrl": "https://example.com/max-messenger-test" }
       },
       "defaultAccount": "bcai"
     }
@@ -501,35 +501,220 @@ Each phase is a single feature branch + PR, sized to fit one mobile review sessi
 Goal: `openclaw start` brings up the bot, a real DM to the bot triggers an agent reply.
 
 In scope:
-- All Phase 1 files from §1 above.
-- `client.ts` wraps `@maxhub/max-bot-api` `Bot` with one method per outbound op needed (`sendMessage` only) and one `start(handler)` for polling. No webhook.
-- `monitor.ts` selects polling unconditionally (webhook config rejected with friendly error).
+- All Phase 1 files from §1 above (under `extensions/max-messenger/` per §8 decision #2).
+- `client.ts` wraps `@maxhub/max-bot-api` (pinned exact `0.0.13` per §8 decision #9) `Bot` with one method per outbound op needed (`sendMessage` only) and a polling supervisor (`monitor-polling.runtime.ts`) — see §6.1 for the detailed transport design.
+- `monitor.ts` selects polling unconditionally (webhook config rejected with friendly error pointing at Phase 2).
 - `inbound.ts` handles `message_created` (text only). All other events: `runtime.log` and ignore.
-- `send.ts` only implements `sendText` via `client.sendMessage`. No attachments, no chunker beyond the SDK default.
+- `send.ts` only implements `sendText` via `client.sendMessage`; chunked at the constant `MAX_TEXT_CHUNK_LIMIT = 4000` (per §8 decision #6) with a `// TODO: verify empirically` comment.
+- `blockStreaming: true` default (per §8 decision #7) — final-block delivery only, no per-token edits.
 - `setup-core.ts` validates `--token` / `--token-file` / `--use-env` and writes account config; no interactive wizard yet.
-- `dmPolicy: "pairing"` with built-in pairing (reuse `createChannelPairingController`).
-- Single account only — `defaultAccount`/`accounts` keys still parse but resolution always uses the top-level fields.
+- `dmPolicy: "pairing"` (per §8 decision #4) with built-in pairing (reuse `createChannelPairingController`).
+- Single account only — `defaultAccount`/`accounts` keys still parse but resolution always uses the top-level fields. Multi-account formally lands in **Phase 5** (per §8 decision #5).
+- No `install.npmSpec` in `package.json`; npm publish lands in Phase 5+ (per §8 decision #10).
+- Empirical proof against a real MAX bot is gated on token issuance (ETA 5–10 working days under ООО «Бизнес-Климат Контрол» — §8 decision #1). Phase 1 lands and CI-passes against a mocked SDK; live smoke is run after the token arrives.
 
 Tests / proof:
-- `pnpm test extensions/max` must pass (one happy-path account-resolution test, one config-schema test).
-- Manual on BCAi: send DM "ping" → bot replies "pong" via test agent (Mikhail does this part).
+- `pnpm test extensions/max-messenger` must pass (one happy-path account-resolution test, one config-schema test, one polling supervisor restart-on-fault test using a fake SDK).
+- Manual on BCAi (post-token): send DM "ping" → bot replies "pong" via test agent (Mikhail does this part).
 
-Branch: `feat/max-plugin-mvp`. PR title: `feat(max): channel plugin MVP — polling + message_created`.
+Branch: `feat/max-messenger-plugin-mvp`. PR title: `feat(max-messenger): channel plugin MVP — polling + message_created`.
+
+### 6.1 Long Polling Transport — Detailed Design (Phase 1)
+
+This subsection captures the empirically-audited behavior of `@maxhub/max-bot-api` and the gaps the openclaw plugin must close to ship a production-grade polling transport. The audit was performed against the public source at [`max-messenger/max-bot-api-client-ts`](https://github.com/max-messenger/max-bot-api-client-ts). Verification gaps and design decisions still pending land in §9.
+
+#### 6.1.1 SDK behavior audit (`@maxhub/max-bot-api`)
+
+> Caveat: latest published version is **`0.2.2`**; the audit below reads off `0.2.2` source. Phase 1 pins `0.0.13` exact (per §8 decision #9). Whether the bugs called out below also exist in `0.0.13` needs verification — see §9 question N1.
+
+| Property | Finding | Citation (in SDK source) |
+|---|---|---|
+| `bot.start()` body | Lazy `getMyInfo()`, then `await polling.loop(handleUpdate)` — never resolves until `stop()` aborts. | `src/bot.ts:60-73` |
+| Per-request long-poll timeout | **Not set by SDK.** `Polling.loop` only passes `{ marker }`; native `fetch` is invoked without an `AbortSignal`-driven timeout. | `src/core/network/polling.ts:24-26`, `src/core/network/api/client.ts:50-53` |
+| Network-error handling | Catches only `err.name === 'FetchError'`. Native Node `fetch` throws `TypeError` (with `cause` set to undici `AbortError`/`SocketError`) — those fall through and kill the loop. | `src/core/network/polling.ts:33,44` |
+| HTTP 5xx | Caught via `MaxError`; logs, waits 5 s, then `return`s instead of `continue`ing — loop exits after a single 5 s wait. (Control-flow bug in shipped SDK.) | `src/core/network/polling.ts:8,33-40` |
+| HTTP 401 (token revoked) | Synthesized as `MaxError(401)`; **not** in the retry whitelist; propagates and crashes the loop. `bot.handleError` defaults to `process.exitCode = 1` and rethrow. | `src/core/network/api/client.ts:55-63`, `src/bot.ts:49-53` |
+| HTTP 429 + `Retry-After` | Caught and waits the same hard-coded 5 s. **`Retry-After` header is not read** — the client discards all response headers and returns only `{ status, data }`. | `src/core/network/polling.ts:8,34-40`, `src/core/network/api/client.ts:65-68` |
+| Built-in exponential backoff | **None.** Single fixed `RETRY_INTERVAL = 5_000` ms; no jitter, no growth, no cap. | `src/core/network/polling.ts:8` |
+| `marker` / offset (resume after restart) | A `marker` exists in the wire protocol and in-memory (updated after each batch), but **the SDK does not persist it and does not expose it via public API**. Process restart re-initializes `marker = undefined`. Functionally **not equivalent** to Telegram's host-managed `getUpdates` `offset`. | `src/core/network/polling.ts:13,24-27`, `src/core/network/api/modules/subscriptions/types.ts:7,14` |
+| `bot.stop()` semantics | Aborts an `AbortController`, but the signal is **not wired into `fetch()`** — the in-flight long-poll request completes naturally; the loop exits on the next `while` check. `stop()` returns immediately and does not await the loop or in-flight handler promises. | `src/bot.ts:75-83`, `src/core/network/polling.ts:50-53`, `src/core/network/api/client.ts:50-53` |
+| Stable update IDs | **None on wire.** The SDK's internal id is the debug label `` `${update.update_type}:${update.timestamp}` `` (two updates can collide on the same millisecond). Stable dedupe keys must come from inner payload ids — `message.body.mid`, `callback.callback_id`, etc. | `src/core/network/api/types/subcription.ts:5-10`, `src/bot.ts:86` |
+
+**Implications for Phase 1.** The shipped SDK does **not** meet production polling requirements out of the box. The plugin must:
+
+1. Wrap `bot.start()` in an outer supervisor that catches the `start()` rejection and restarts the `Bot` instance with backoff, because most error paths exit the loop after a single fixed 5 s wait.
+2. Persist `marker` itself by either (a) subclassing `Polling` to expose it, (b) bypassing `bot.start()` and calling `api.getUpdates({ marker })` directly, or (c) accepting event replay or loss across restarts. Decision pending — see §9 question N2.
+3. Implement plugin-layer dedupe keyed off payload-level ids (`message.body.mid`, `callback.callback_id`) if (b) or (c) above is chosen — see §9 question N3.
+4. Implement custom backoff with jitter and `Retry-After` parsing (the SDK provides neither).
+5. Treat `bot.stop()` as fire-and-forget; track in-flight handler promises externally if a graceful-shutdown SLA matters.
+
+#### 6.1.2 Configuration surface (`channels.max-messenger.polling`)
+
+Adds to `MaxConfigSchema` (§5.2). All fields optional with defaults from §8.
+
+```typescript
+import { z } from "openclaw/plugin-sdk/zod";
+
+const MaxPollingConfigSchema = z
+  .object({
+    // Long-poll request timeout passed to MAX (the server holds the connection
+    // open up to this many seconds before responding). Maps to `GetUpdatesDTO.timeout`.
+    timeoutSec: z.number().int().min(1).max(120).default(30),
+
+    // Initial backoff after a transient error (network, 5xx, 429 without Retry-After).
+    // Doubles on each consecutive failure, capped at `maxBackoffMs`, with jitter.
+    retryBackoffMs: z.number().int().min(100).max(60_000).default(1_000),
+
+    // Cap for exponential backoff growth.
+    maxBackoffMs: z.number().int().min(1_000).max(300_000).default(30_000),
+
+    // SIGTERM grace window. After `await bot.stop()` returns we wait up to this
+    // long for in-flight handler promises to drain before force-exit.
+    gracefulShutdownTimeoutMs: z.number().int().min(500).max(30_000).default(5_000),
+
+    // Whether to persist `marker` across restarts so polling resumes from the last
+    // ack'd event. Phase 1 default false because the SDK does not expose `marker`
+    // (see §6.1.1 #8). Implementation strategy tracked in §9 question N2.
+    resumeFromLastEvent: z.boolean().default(false),
+  })
+  .default({});
+```
+
+Wired into `MaxAccountSchemaBase` (§5.2):
+
+```typescript
+const MaxAccountSchemaBase = z
+  .object({
+    // ... existing fields ...
+    polling: MaxPollingConfigSchema,
+  })
+  .strict();
+```
+
+User-facing example:
+
+```jsonc
+{
+  "channels": {
+    "max-messenger": {
+      "tokenFile": "~/.openclaw/credentials/max-messenger-bcai.token",
+      "transport": "polling",
+      "polling": {
+        "timeoutSec": 30,
+        "retryBackoffMs": 1000,
+        "maxBackoffMs": 30000,
+        "gracefulShutdownTimeoutMs": 5000,
+        "resumeFromLastEvent": false
+      }
+    }
+  }
+}
+```
+
+#### 6.1.3 Lifecycle integration with the openclaw Gateway
+
+The plugin's `gateway.startAccount(ctx)` hook is the entry point. Pattern is identical in shape to nextcloud-talk's `extensions/nextcloud-talk/src/gateway.ts:14-43` but wraps a polling supervisor in `runStoppablePassiveMonitor` (`src/plugin-sdk/extension-shared.ts:69`) instead of an HTTP listener.
+
+**Hook contract.** `ChannelGatewayAdapter` is defined at `src/channels/plugins/types.adapters.ts:341`; lifecycle hooks at `src/channels/plugins/types.adapters.ts:545`.
+
+| Hook | When called | MAX plugin behavior |
+|---|---|---|
+| `gateway.startAccount(ctx)` | First account materialization or after config reload | Construct `Bot` with `{ token, baseUrl: apiRoot }`; build supervisor that calls `bot.start(handler)` inside `runStoppablePassiveMonitor`; return once supervisor is registered. |
+| `gateway.logoutAccount(ctx)` | Account removed | Clear persisted marker (if any), clear secrets, trigger config write with auto-reload. |
+| `lifecycle.onAccountConfigChanged(ctx)` | Token / transport / polling config changed | If `token` changed: clear persisted `marker` (Telegram analogue: `extensions/telegram/src/channel.ts:741`), then trigger a stop+start cycle on the affected account. |
+| `lifecycle.onAccountRemoved(ctx)` | Account deleted | Same as `logoutAccount` plus full state cleanup. |
+
+The gateway always passes `ctx.abortSignal` (`src/channels/plugins/types.adapters.ts:238-312`); the supervisor's lifetime is bound to that signal.
+
+**Sketch (Phase 1, single-account form).** Mirrors `extensions/nextcloud-talk/src/gateway.ts:14-43` and `extensions/telegram/src/polling-session.ts:120-352` for the supervisor shape.
+
+```typescript
+// extensions/max-messenger/src/gateway.ts
+import { runStoppablePassiveMonitor } from "openclaw/plugin-sdk/extension-shared";
+import { createAccountStatusSink } from "openclaw/plugin-sdk/channel-lifecycle";
+
+export const maxMessengerGatewayAdapter: ChannelGatewayAdapter<ResolvedMaxAccount> = {
+  startAccount: async (ctx) => {
+    const status = createAccountStatusSink(ctx);
+    await runStoppablePassiveMonitor({
+      abortSignal: ctx.abortSignal,
+      start: async ({ stopSignal }) => {
+        const supervisor = createPollingSupervisor({
+          account: ctx.account,
+          runtime: ctx.runtime,
+          polling: ctx.cfg.polling, // from MaxPollingConfigSchema
+          handler: (update) => handleMaxInbound(ctx, update),
+          status,
+          log: ctx.log,
+        });
+        try {
+          await supervisor.run(stopSignal); // resolves when stopSignal fires
+        } finally {
+          await supervisor.shutdown(ctx.cfg.polling.gracefulShutdownTimeoutMs);
+        }
+      },
+    });
+  },
+  logoutAccount: async (ctx) => {
+    await ctx.runtime.markerStore?.clear(ctx.accountId);
+  },
+};
+```
+
+`createPollingSupervisor` (in `monitor-polling.runtime.ts`) is the layer that adds the missing pieces from §6.1.1:
+
+- Catches `bot.start()` rejection and restarts the `Bot` instance with exponential backoff (`retryBackoffMs` doubling, capped at `maxBackoffMs`, with ±20% jitter).
+- Tracks consecutive failures; on a persistent fatal (e.g. 401) reports `accountStatus = "offline"` via `status.setStatus(...)` and stops restarting.
+- Outer wall-clock watchdog (`timeoutSec + 10 s` slack) detects hung long-polls and force-restarts the `Bot` (Telegram analogue: `extensions/telegram/src/polling-session.ts:326-352`).
+- Phase 5 / behind `resumeFromLastEvent`: reads/writes `marker` to `ctx.runtime.markerStore` around `bot.start()` (subject to §9 N2).
+
+**Token rotation without gateway restart.** Handled by `lifecycle.onAccountConfigChanged` triggering a stop+start cycle on the affected account. The supervisor's `shutdown(timeoutMs)` ensures the old `Bot`'s polling loop drains (or is given up on) before the new instance starts.
+
+**Gateway shutdown (SIGTERM).** Gateway aborts `ctx.abortSignal`; `runStoppablePassiveMonitor` invokes the stop branch which calls `supervisor.shutdown(gracefulShutdownTimeoutMs)`. Inside `shutdown`, we `await bot.stop()` (returns immediately per §6.1.1 #9) and then race a Promise that resolves when in-flight handler promises drain against a `setTimeout` for `gracefulShutdownTimeoutMs`. After the timeout we emit `max-messenger.polling.shutdown_timeout` (see §6.1.5) and let the process exit anyway.
+
+#### 6.1.4 Failure modes
+
+| Scenario | Detection | Plugin reaction | User-visible effect |
+|---|---|---|---|
+| MAX API DNS / network unreachable | `fetch` throws (undici `TypeError` with `cause`); SDK kills the loop | Supervisor catches rejection; exponential backoff (`retryBackoffMs` → `maxBackoffMs`) with jitter; warn every Nth retry | None (silent retry); status badge flips to `degraded` after N consecutive failures |
+| Long-poll request hangs (no response, no socket close) | Supervisor's outer wall-clock timer (`timeoutSec + 10 s` slack) fires | Force-kill `Bot` instance; rebuild from scratch | Brief gap, then resume |
+| HTTP 5xx from MAX | SDK `MaxError(5xx)` exits the loop after one 5 s wait | Supervisor catches resolution; backoff + restart | Brief gap, then resume |
+| HTTP 429 with `Retry-After` | SDK loses the header (§6.1.1 #6) | Phase 1: fall back to `retryBackoffMs` exponential growth (capped at `maxBackoffMs`). Phase 1 TODO (see §9 N4): override `client.call` to capture headers and honor `Retry-After`. | Brief delay (longer than necessary until N4 ships) |
+| HTTP 401 (token revoked) | SDK throws `MaxError(401)` and exits loop; supervisor sees rejection | Halt supervisor, mark account `offline`, emit `max-messenger.polling.fatal`; require admin re-issue via `openclaw doctor` or `openclaw onboard` | Channel marked offline in `openclaw status` |
+| Gateway SIGTERM during in-flight long-poll | `ctx.abortSignal` fires | `await bot.stop()` returns immediately; race in-flight handler drain vs `gracefulShutdownTimeoutMs` (default 5 s); force-exit on timeout | Brief unresponsiveness during restart |
+| Unhandled exception inside `handleMaxInbound` | SDK calls `bot.handleError`; default sets `process.exitCode = 1` and rethrows | Override `bot.handleError` on construction to log + swallow; supervisor restarts only if rethrow surfaces | Single message dropped |
+| Same event delivered twice (after restart with marker reset / replay) | Same `mid` / `callback_id` seen | Phase 1: not deduplicated — see §9 question N3. Plugin-layer LRU on `mid` / `callback_id` is the planned answer. | Possible duplicate reply (until N3 ships) |
+| SDK loop exits silently on uncaught control-flow bug (§6.1.1 #3, #4, #6) | Supervisor's `bot.start()` promise resolves without `stop()` having been called | Treat as restart trigger; backoff and restart `Bot` | Brief gap, then resume |
+
+#### 6.1.5 Telemetry (minimum)
+
+The supervisor emits via `runtime.log` and the status sink:
+
+- `max-messenger.polling.restart` — every supervisor-driven restart, with `{ accountId, attempt, backoffMs, lastError }`.
+- `max-messenger.polling.fatal` — terminal stop after a non-recoverable error (e.g. 401), with `{ accountId, error }`.
+- `max-messenger.polling.shutdown_timeout` — when graceful shutdown exceeded `gracefulShutdownTimeoutMs`.
+- `max-messenger.polling.marker_reset` — when persisted marker is cleared (token rotation, explicit reset). Only fires when `resumeFromLastEvent` is on.
 
 ### Phase 2 — Webhook transport
 
+Owner decision (§8 #3): MAX webhooks are unsigned in public docs, so Phase 2 ships a defense-in-depth model — HTTPS-only, secret URL segment, optional IP allowlist — and tracks an explicit TODO to probe for an undocumented signature header against a live bot.
+
 In scope:
-- `monitor-webhook.runtime.ts` mirrors `extensions/nextcloud-talk/src/monitor.ts:228-385` (HTTP listener, body limit, rate limiter, healthz).
-- `replay-guard.ts` mirrors `extensions/nextcloud-talk/src/replay-guard.ts` (in-memory dedupe by `(accountId, chatId, messageId)`).
-- `signature.ts` — only if MAX adds signed webhooks; otherwise document plaintext POST limitation and require operator network controls. **Open question — see §7.**
-- Doctor warning when both `transport: "webhook"` and `webhookUrl` missing, or vice versa.
-- Lifecycle: on switch from webhook → polling, call `delete_webhook` first (per MAX docs §Transports).
+- `monitor-webhook.runtime.ts` mirrors `extensions/nextcloud-talk/src/monitor.ts:228-385` (HTTP listener, body limit, rate limiter, healthz). HTTPS-only — config validation rejects plain `http://` `webhookUrl` outside loopback.
+- New config field `channels.max-messenger.webhookSecret` (string, 32 chars). Generated by `openclaw onboard` and embedded into the public URL: `/webhook/max-messenger/<secret>`. Requests not matching the path-segment secret get a 404 (without timing leakage).
+- New config field `channels.max-messenger.allowedIPs[]` (string[], default `[]` = disabled). When non-empty, requests from peers outside the list get a 403.
+- `replay-guard.ts` mirrors `extensions/nextcloud-talk/src/replay-guard.ts` (in-memory dedupe by `(accountId, chatId, messageId)`; for MAX `messageId = message.body.mid` per §6.1.1 #10).
+- `signature.ts` — placeholder. Phase 2 TODO: probe live MAX webhook headers for an undocumented signature; if present, wire HMAC verification here. Until verified absent or implemented, document plaintext POST limitation in `docs/channels/max-messenger.md`.
+- Doctor warning when both `transport: "webhook"` and `webhookUrl` missing, or vice versa; also when `webhookUrl` is `http://` (non-loopback) or when `webhookSecret` is missing/short.
+- Lifecycle: on switch from webhook → polling, call `delete_webhook` first (per MAX docs §Transports). Then start polling supervisor (§6.1).
 
 Tests:
 - Webhook handler unit tests (`monitor.replay.test.ts`-style).
+- Path-secret rejection test (404 for wrong segment, success for right segment).
+- IP allowlist test (403 for non-listed peer).
 - E2E: BCAi pairs with a public Cloudflare tunnel, real MAX → tunnel → BCAi → reply.
 
-Branch: `feat/max-webhook-transport`. PR title: `feat(max): webhook transport`.
+Branch: `feat/max-messenger-webhook-transport`. PR title: `feat(max-messenger): webhook transport`.
 
 ### Phase 3 — Callback buttons + inline keyboard
 
@@ -556,17 +741,27 @@ Tests: mock `fetch` for upload presign; verify outbound serializes `attachments[
 
 Branch: `feat/max-attachments`. PR title: `feat(max): attachments (image/file send and receive)`.
 
-### Phase 5 — Multi-account support
+### Phase 5 — Multi-account support + standalone npm release
 
-In scope:
+Owner decision (§8 #5, #10): Phase 5 is the natural home for both multi-account work and the first `@bccontrol/openclaw-max-messenger` npm publish (insurance ahead of the upstream PR). The two ship in the same phase because the secret-contract and config-prefix surface settles only once multi-account is real.
+
+In scope (multi-account):
 - Promote `account-config.ts` and `account-selection.ts` to use `accounts.*` and `defaultAccount` fully (Phase 1 stub becomes real).
-- `secret-contract.ts` adds `channels.max.accounts.*.token` entries (mirror `extensions/nextcloud-talk/src/secret-contract.ts:11-55`).
+- `secret-contract.ts` adds `channels.max-messenger.accounts.*.token` entries (mirror `extensions/nextcloud-talk/src/secret-contract.ts:11-55`).
 - Status snapshot per-account.
-- CLI: `openclaw max status [--account <id>]` lists configured accounts (via `registerCli` in `index.ts`).
+- CLI: `openclaw max-messenger status [--account <id>]` lists configured accounts (via `registerCli` in `index.ts`).
+- Marker persistence (per §6.1.1 #8 and §9 N2 once N2 is answered): per-account `marker` storage to enable `polling.resumeFromLastEvent` reliably.
 
-Tests: account merge / default-account fallback / disabled-account skip.
+In scope (standalone npm publish):
+- Add `install.npmSpec: "@bccontrol/openclaw-max-messenger"` to `package.json` `openclaw` block.
+- Add `release.publishToClawHub` if/when ClawHub catalog accepts it.
+- Verify package contents under `Package Acceptance` workflow before first publish.
 
-Branch: `feat/max-multi-account`. PR title: `feat(max): multi-account support`.
+Tests: account merge / default-account fallback / disabled-account skip; marker round-trip across simulated restart; package acceptance smoke for the published artifact.
+
+Branch: `feat/max-messenger-multi-account`. PR title: `feat(max-messenger): multi-account support and npm publish`.
+
+> Long-term: after Phase 5–6 stabilize on real BCAi traffic, open a PR to `openclaw/openclaw` upstream that lifts `extensions/max-messenger/` into the bundled set. Until then the bundled+npm dual ship is the safety net.
 
 ### Phase 6 — Test sweep
 
@@ -593,20 +788,96 @@ Branch: `chore/max-tests`. PR title: `chore(max): add unit and integration tests
 Numbered so they can be answered inline as a PR comment.
 
 1. **Bot registration timeline.** Phase 1 cannot be smoke-tested without a real `MAX_BOT_TOKEN`. Has the legal entity (ООО «Бизнес-Климат Контрол» or ООО «BS FM») already started moderation at dev.max.ru? Approximate ETA?
+
+   **Resolution:** Registration starts immediately under **ООО «Бизнес-Климат Контрол»** (existing Минцифры registry experience → cleaner moderation than БС ФМ). Realistic ETA 5–10 working days. Phase 1 codes against a mocked SDK without a live token; live smoke is run after the token arrives.
+
 2. **Channel id `"max"` vs `"max-messenger"`.** I propose `id: "max"` (short, matches user-facing branding). The aliases `["max-messenger"]` accept the longer form. If you'd prefer `"max-messenger"` as primary (to avoid clashing with future Anthropic "max" model labels in CLI completion), say so now — it's harder to rename later.
+
+   **Resolution:** Use `id: "max-messenger"` as primary, `aliases: ["max"]` as shorthand. `"max"` is too generic to grep cleanly in logs/configs, conflicts with model labels, and upstream openclaw prefers fully-qualified channel ids (precedents: `nextcloud-talk` not `nc`, `google-chat` not `google`).
+
 3. **Webhook signature.** `docs/max-plugin/max-api-reference.md` doesn't list a webhook signature header. Confirm that MAX webhook delivery is unsigned plaintext POST (in which case Phase 2 mandates HTTPS + secret URL path + IP allowlist) or point me at the signature spec if one exists.
+
+   **Resolution:** Confirmed unsigned in public docs. Phase 2 ships defense-in-depth: HTTPS-only (config validation rejects `http://` outside loopback) + secret 32-char URL segment `/webhook/max-messenger/<secret>` (generated at `openclaw onboard`, stored in `channels.max-messenger.webhookSecret`) + optional `channels.max-messenger.allowedIPs[]` (empty default = disabled). Phase 2 TODO: probe a live webhook for an undocumented signature header.
+
 4. **dmPolicy default.** Russian-language onboarding might want different defaults — should default `dmPolicy` be `"pairing"` (like nextcloud-talk and Telegram) or `"allowlist"` (more conservative)?
+
+   **Resolution:** `"pairing"`. Consistency with nextcloud-talk and Telegram outweighs locale-specific tuning; Russian-language onboarding can explain the pairing flow without changing the security model.
+
 5. **Multi-account in Phase 1.** Phase 1 ships single-account only; multi-account is Phase 5. OK to defer, or do you need prod + staging in parallel from day one?
+
+   **Resolution:** Single-account in Phase 1; multi-account formally lands in Phase 5. Prod/staging parallelism is not needed until production traffic cutover, which is timed to land alongside Phase 5.
+
 6. **MAX message length limit.** Listed as open question in `max-api-reference.md`. Phase 1 uses `textChunkLimit: 4000` (Telegram default). Is that right for MAX?
+
+   **Resolution:** Phase 1 default `textChunkLimit: 4000`, exposed in code as the named constant `MAX_TEXT_CHUNK_LIMIT` with a `// TODO: verify empirically` comment. Unofficial sources cite ~4000 chars but no `dev.max.ru` confirmation; README marks `verified empirically: TODO` until first smoke test.
+
 7. **Block-streaming default.** Nextcloud-talk sets `blockStreaming: true` (suppress streaming, send final block only) and Telegram defaults to streaming. MAX has no documented streaming UX — propose `blockStreaming: true` in Phase 1. Confirm?
+
+   **Resolution:** Confirmed `blockStreaming: true` in Phase 1. MAX has no documented streaming UX; spamming `edit_message` every ~200 ms is risky until mobile-client rendering is verified. Streaming flip will be a separate PR after live UX testing.
+
 8. **Reference to `docs/tools/plugin.md`.** That path doesn't exist in this repo; the actual authoring docs live at `docs/plugins/building-plugins.md`, `docs/plugins/sdk-channel-plugins.md`, and `docs/plugins/manifest.md`. Update CONTEXT.md when convenient. (Not blocking.)
+
+   **Resolution:** Owner will fix `CONTEXT.md` paths in a separate PR (`docs/plugins/building-plugins.md`, `docs/plugins/sdk-channel-plugins.md`, `docs/plugins/manifest.md`). Not blocking Phase 1.
+
 9. **`@maxhub/max-bot-api` version pin.** I plan to pin `^0.0.13` (current). Confirm acceptable, or pin tighter (e.g. exact version) until the SDK stabilizes.
+
+   **Resolution:** Exact pin `"@maxhub/max-bot-api": "0.0.13"` (no caret). SDK is pre-1.0 (`0.0.x`) — every minor is a potential breaking change under semver. Upgrades go through `pnpm update` after explicit changelog review; relax to `^1.0.0` only once the SDK reaches `1.x`.
+
 10. **Upstream contribution.** Is the eventual contribution path "PR to openclaw/openclaw" or "publish standalone `@openclaw/max` to npm/ClawHub"? Affects whether to add `install.npmSpec` in `package.json` (Phase 5) and whether to follow the bundled-plugin or external-plugin entrypoint pattern (currently planned: bundled).
+
+   **Resolution:** Bundled in `extensions/max-messenger/` for Phases 1–5 (mirroring `nextcloud-talk`). Phase 5+ also publishes `@bccontrol/openclaw-max-messenger` on npm as release insurance. Long-term goal: PR to `openclaw/openclaw` upstream after stabilization on real BCAi traffic. Phase 1 omits `install.npmSpec`.
+
+---
+
+## 8. Decisions Locked for Phase 1
+
+Locked from the PR #2 owner answers (https://github.com/mefodiytr/openclaw/pull/2#issuecomment-4365909719) and the SDK audit in §6.1.
+
+| #  | Decision                                       | Value                                                                  | Rationale                                                                                                                              |
+|----|------------------------------------------------|------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------|
+| 1  | Bot legal entity                               | ООО «Бизнес-Климат Контрол»                                            | Existing Минцифры registry experience → cleaner moderation than the БС ФМ alternative. Phase 1 codes against mocked SDK without token. |
+| 2  | Channel id (primary)                           | `max-messenger` (alias `max`)                                          | Avoids collision with model "max" labels; matches upstream convention (`nextcloud-talk`, `google-chat`); cleaner to grep in logs.      |
+| 3  | Webhook security model (Phase 2)               | HTTPS-only + secret URL segment + optional IP allowlist                | MAX has no documented webhook signature; defense-in-depth until/unless an undocumented signature header is found in Phase 2 probe.     |
+| 4  | dmPolicy default                               | `"pairing"`                                                            | Consistency with nextcloud-talk and Telegram outweighs locale-specific tuning.                                                         |
+| 5  | Multi-account in Phase 1                       | Single-account only; multi-account → Phase 5                           | Prod/staging parallelism not needed until production traffic cutover.                                                                  |
+| 6  | textChunkLimit                                 | `4000` (named constant `MAX_TEXT_CHUNK_LIMIT`, with TODO)              | Unverified upstream limit; revisit after first empirical smoke test.                                                                   |
+| 7  | blockStreaming default                         | `true`                                                                 | MAX has no documented streaming UX; avoid spamming `edit_message` until live UX is verified on mobile clients.                         |
+| 8  | CONTEXT.md docs path correction                | Owner will fix in a separate PR                                        | Not blocking Phase 1.                                                                                                                  |
+| 9  | `@maxhub/max-bot-api` version pin              | Exact `0.0.13` (no caret)                                              | SDK is pre-1.0 — every minor is a potential breaking change under semver.                                                              |
+| 10 | Upstream contribution path                     | Bundled in `extensions/max-messenger/` (Phases 1–5); npm `@bccontrol/openclaw-max-messenger` (Phase 5+); upstream PR after stabilization | Bundled = fastest iteration; npm = release insurance; upstream = long-term home.                                                       |
+| 11 | Long-poll request timeout (`timeoutSec`)       | `30` seconds                                                           | Standard long-poll window; balances latency vs server load.                                                                            |
+| 12 | Initial retry backoff (`retryBackoffMs`)       | `1000` ms                                                              | Conservative start; lets brief MAX glitches clear without retry-spam.                                                                  |
+| 13 | Max retry backoff (`maxBackoffMs`)             | `30000` ms                                                             | Cap to avoid stalled bot during prolonged MAX outage.                                                                                  |
+| 14 | Graceful shutdown timeout                      | `5000` ms                                                              | Balances UX (don't drop in-flight reply) vs gateway restart speed.                                                                     |
+| 15 | Resume from last event (`resumeFromLastEvent`) | Phase 1 default `false`; revisit per §9 N2                             | SDK does not persist `marker`; resuming requires custom state persistence in the openclaw layer (see §6.1.1 #8).                       |
+
+---
+
+## 9. Phase 1 Long Polling — New Open Questions
+
+Surfaced by the SDK audit in §6.1.1. None block Phase 1 scaffolding, but answers are needed before the polling supervisor lands.
+
+**N1. SDK version sanity-check.** The audit in §6.1.1 was performed against `@maxhub/max-bot-api` `0.2.2` (latest published). Phase 1 pin is `0.0.13` (decision §8 #9). Should we (a) diff `0.0.13` source to confirm whether the loop-exits-after-one-error bug, missing `Retry-After` handling, missing `marker` persistence, and unwired `AbortSignal` described in §6.1.1 also exist in `0.0.13`; or (b) reconsider the version pin upward toward a release that fixes some of these? If (b), which version?
+
+**N2. Marker persistence strategy.** The SDK keeps `marker` private and discards it on restart. Which approach for Phase 1?
+- (a) Subclass / monkey-patch `Polling` to expose `marker` and call `markerStore.set` after each batch.
+- (b) Bypass `bot.start()` entirely; call `api.getUpdates({ marker })` directly in a custom loop and feed updates into the SDK's `handleUpdate` ourselves.
+- (c) Accept event replay or loss across restarts in Phase 1; defer real persistence to Phase 5.
+
+**N3. Inbound dedup at the openclaw layer.** If we restart with a stale marker (or without marker support at all), MAX will replay events. Should we dedupe at the plugin layer using `message.body.mid` for `message_created` and `callback.callback_id` for `message_callback`, with a short TTL (e.g. 1 hour) in-memory cache? Or rely on agent-side idempotency? Need a decision before N2.
+
+**N4. Custom HTTP fetch for `Retry-After` and request timeouts.** The SDK discards response headers and does not pass `AbortSignal` to `fetch`. To honor `Retry-After` and to bound a hung long-poll request, we need to override the SDK's `client.call`. OK to ship a small `client-override.ts` in Phase 1 (~50 LOC), or defer and accept worst-case behavior (5 s blanket backoff, sockets that hang for the OS default)?
+
+**N5. Polling-restart visibility.** `runtime.log` is fine for local debug. For production, do we want a structured event surfaced through the status sink so `openclaw status` shows "MAX channel restarted N times in last hour"? Or is silent self-healing fine until something explicitly fails?
+
+**N6. Empirical SDK behavior verification.** Several of §6.1.1's findings (HTTP 429 behavior in particular, and whether `bot.start()` actually exits as the source predicts) are read off the source. Should we set up a Phase 0.5 test harness — a fake MAX server that returns 401 / 429 / 5xx / network errors on demand — to validate the supervisor handles each correctly, before bot moderation finishes? This unblocks Phase 1 hardening without needing a real token.
+
+**N7. Bot instance restart vs full re-init on token rotation.** When `onAccountConfigChanged` sees a new token, do we (a) recreate the `Bot` in-place with stop+start, (b) invalidate the old persisted marker file, or (c) both? Option (a) risks the in-flight handler from the old instance racing the new one; option (b)+(a) is cleanest but means the new instance always replays the most recent batch. Need to confirm before §9 N2 lands.
 
 ---
 
 ## Summary
 
-Phase 1 PR creates ~22 files (~1500 LOC) by translating nextcloud-talk's webhook plugin into a polling plugin that uses `@maxhub/max-bot-api` as the transport. Subsequent phases each add one well-scoped feature in 200–400 LOC. The choice of nextcloud-talk over telegram as the structural template keeps the surface area small; we promote to telegram-style complexity only when MAX-specific needs require it (e.g. multi-account in Phase 5).
+Phase 1 PR creates ~22 files (~1500 LOC) by translating nextcloud-talk's webhook plugin into a polling plugin that uses `@maxhub/max-bot-api` as the transport, plus a thin polling supervisor (§6.1) that compensates for the SDK's missing retry/backoff/marker plumbing. Subsequent phases each add one well-scoped feature in 200–400 LOC. The choice of nextcloud-talk over telegram as the structural template keeps the surface area small; we promote to telegram-style complexity only when MAX-specific needs require it (e.g. multi-account in Phase 5).
 
 Total expected file count at Phase 6: roughly equal to nextcloud-talk's current ~30 files (production + tests).
