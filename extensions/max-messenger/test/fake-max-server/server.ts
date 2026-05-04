@@ -254,10 +254,20 @@ export async function startFakeMaxServer(opts: FakeMaxStartOptions): Promise<Fak
     }
 
     if (spec.delayMs && spec.delayMs > 0) {
+      // Cancel the delay when the client closes its socket so tests do not
+      // keep pending timers alive after the supervisor aborts an in-flight
+      // long-poll. `setTimeout(... { signal })` from node:timers/promises
+      // throws AbortError on early cancellation, which we swallow.
+      const delayCtrl = new AbortController();
+      const onSocketClose = (): void => delayCtrl.abort();
+      req.socket.once("close", onSocketClose);
       try {
-        await setTimeoutPromise(spec.delayMs);
+        await setTimeoutPromise(spec.delayMs, undefined, { signal: delayCtrl.signal });
       } catch {
-        // setTimeout cancellation is irrelevant — the socket may already be closed.
+        // AbortError or unrelated rejection — fall through to the destroyed
+        // check below; we never write to a closed socket.
+      } finally {
+        req.socket.removeListener("close", onSocketClose);
       }
     }
 

@@ -92,6 +92,13 @@ export type PollingLoopOptions = {
   /** Test seams. */
   fetchImpl?: typeof fetch;
   random?: () => number;
+  /**
+   * Override the per-request HTTP timeout. Defaults to
+   * `(timeoutSec + 10) * 1000` ms (the slack accounts for network latency
+   * past the long-poll hold). Tests pass a tighter value to drive
+   * `slow-response` scenarios without waiting 11+ seconds.
+   */
+  requestTimeoutMs?: number;
 };
 
 /** Extract the stable dedup key, or undefined when none is available. */
@@ -154,7 +161,8 @@ export async function runPollingLoop(
   const jitterRatio = opts.jitterRatio ?? DEFAULT_JITTER_RATIO;
   const random = opts.random ?? Math.random;
   const batchLimit = opts.batchLimit ?? DEFAULT_BATCH_LIMIT;
-  const requestTimeoutMs = (opts.timeoutSec + REQUEST_TIMEOUT_SLACK_SEC) * 1000;
+  const requestTimeoutMs =
+    opts.requestTimeoutMs ?? (opts.timeoutSec + REQUEST_TIMEOUT_SLACK_SEC) * 1000;
 
   // Resume from persisted marker, or start fresh on first run / token rotation.
   const loaded = await markerStore.load(opts.tokenHash);

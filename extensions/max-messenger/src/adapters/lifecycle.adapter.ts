@@ -24,13 +24,30 @@ import {
   type MaxPollingSupervisorResult,
 } from "../polling/monitor-polling.runtime.js";
 import type { PollingLogger, PollingUpdate } from "../polling/polling-loop.js";
-import type { ResolvedMaxAccount } from "../types.js";
-import type { MaxEvent, MaxUpdateType } from "../types.js";
+import type { MaxEvent, MaxPollingConfig, MaxUpdateType, ResolvedMaxAccount } from "../types.js";
 import { dispatchInboundEvent, type MaxInboundContext } from "./inbound.adapter.js";
 
-const POLL_TIMEOUT_SEC = 30;
-const POLL_RETRY_BACKOFF_MS = 1000;
-const POLL_MAX_BACKOFF_MS = 30_000;
+/**
+ * Locked polling defaults (per plan §8 rows 11-15). The schema in
+ * `config-schema.ts` documents the same values via Zod `.default(...)`; the
+ * resolver returns raw config (no schema parse), so these constants are the
+ * runtime fallback when a field is omitted.
+ */
+const POLL_DEFAULT_TIMEOUT_SEC = 30;
+const POLL_DEFAULT_RETRY_BACKOFF_MS = 1000;
+const POLL_DEFAULT_MAX_BACKOFF_MS = 30_000;
+
+function resolvePollingTunables(polling: MaxPollingConfig | undefined): {
+  timeoutSec: number;
+  retryBackoffMs: number;
+  maxBackoffMs: number;
+} {
+  return {
+    timeoutSec: polling?.timeoutSec ?? POLL_DEFAULT_TIMEOUT_SEC,
+    retryBackoffMs: polling?.retryBackoffMs ?? POLL_DEFAULT_RETRY_BACKOFF_MS,
+    maxBackoffMs: polling?.maxBackoffMs ?? POLL_DEFAULT_MAX_BACKOFF_MS,
+  };
+}
 
 /**
  * Adapt the gateway `ChannelLogSink` (string-only) to the structured
@@ -118,10 +135,12 @@ export const maxMessengerLifecycleAdapter = {
       log: { info: (msg) => ctx.log?.info?.(msg) },
     };
     const dispatch = buildSupervisorDispatch(inboundCtx);
+    const tunables = resolvePollingTunables(account.config.polling);
 
     pollingLogger.info("max-messenger.polling.start", {
       apiRoot: account.apiRoot,
       tokenSource: account.tokenSource,
+      polling: tunables,
     });
 
     await runStoppablePassiveMonitor({
@@ -140,9 +159,9 @@ export const maxMessengerLifecycleAdapter = {
           apiRoot: account.apiRoot,
           token: account.token,
           accountId: account.accountId,
-          timeoutSec: POLL_TIMEOUT_SEC,
-          retryBackoffMs: POLL_RETRY_BACKOFF_MS,
-          maxBackoffMs: POLL_MAX_BACKOFF_MS,
+          timeoutSec: tunables.timeoutSec,
+          retryBackoffMs: tunables.retryBackoffMs,
+          maxBackoffMs: tunables.maxBackoffMs,
           dispatch,
           abortSignal: internalCtrl.signal,
           log: pollingLogger,

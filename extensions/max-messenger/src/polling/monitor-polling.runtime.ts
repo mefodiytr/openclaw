@@ -47,6 +47,8 @@ export type MaxPollingSupervisorOptions = {
   dedup?: DedupCache;
   fetchImpl?: typeof fetch;
   random?: () => number;
+  /** Override the per-request HTTP timeout (test seam — see polling-loop.ts). */
+  requestTimeoutMs?: number;
 };
 
 export type MaxPollingSupervisorResult = "aborted" | "unauthorized";
@@ -90,5 +92,6 @@ export async function runMaxPollingSupervisor(
     log: opts.log,
     ...(opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : {}),
     ...(opts.random ? { random: opts.random } : {}),
+    ...(opts.requestTimeoutMs !== undefined ? { requestTimeoutMs: opts.requestTimeoutMs } : {}),
   });
 }

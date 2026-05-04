@@ -175,9 +175,34 @@ export function parseRetryAfterMs(
  * Distinguish abort caused by our timeout vs by the caller. Caller-driven
  * AbortError propagates as-is so the loop can exit cleanly on gateway shutdown
  * without classifying it as a transport failure.
+ *
+ * Node 22+ undici's `fetch` reports two flavors of abort via `DOMException`:
+ *   - `name = "AbortError"`   when the controller was aborted manually.
+ *   - `name = "TimeoutError"` when `AbortSignal.timeout(...)` fired.
+ *
+ * Both indicate "abort", not transport failure. The caller still distinguishes
+ * caller-driven vs timeout via the `isTimeout()` predicate from
+ * `composeRequestSignal`, so this helper just answers "did the request abort?"
  */
-function isAbortError(err: unknown): err is DOMException {
-  return err instanceof DOMException && err.name === "AbortError";
+function isAbortLikeError(err: unknown): boolean {
+  if (err instanceof DOMException) {
+    if (err.name === "AbortError" || err.name === "TimeoutError") {
+      return true;
+    }
+  }
+  if (err instanceof Error) {
+    if (err.name === "AbortError" || err.name === "TimeoutError") {
+      return true;
+    }
+    // undici occasionally wraps the abort in a TypeError with a DOMException cause.
+    const cause = (err as { cause?: unknown }).cause;
+    if (cause instanceof DOMException) {
+      if (cause.name === "AbortError" || cause.name === "TimeoutError") {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 /**
@@ -206,7 +231,7 @@ export async function pollingHttpRequest<T = unknown>(req: PollingHttpRequest): 
       signal,
     });
   } catch (err) {
-    if (isAbortError(err)) {
+    if (isAbortLikeError(err)) {
       if (isTimeout()) {
         throw new TimeoutError(requestTimeoutMs);
       }
