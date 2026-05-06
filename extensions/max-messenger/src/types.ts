@@ -166,3 +166,21 @@ export type MaxInboundMessage = {
 
 /** @deprecated Use {@link MaxInboundMessage}. Kept for transitional callers. */
 export type MaxMessage = MaxInboundMessage;
+
+/**
+ * Normalized inline-keyboard callback press — produced by
+ * `normalizeMaxCallbackEvent`. Pure shape; no SDK dependency, so the
+ * downstream `handleMaxCallback` is the only file dragging the heavy
+ * agent reply pipeline.
+ */
+export type MaxCallbackEvent = {
+  callbackId: string;
+  payload: string | undefined;
+  senderId: string;
+  senderName: string;
+  chatId: string;
+  isGroupChat: boolean;
+  /** mid of the parent message bearing the buttons (when MAX includes it). */
+  parentMessageId?: string;
+  timestamp: number;
+};
