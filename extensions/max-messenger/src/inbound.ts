@@ -33,10 +33,15 @@ import {
   type RuntimeEnv,
 } from "./runtime-api.js";
 import { getMaxRuntime } from "./runtime.js";
-import { sendMaxText } from "./send.js";
-import type { CoreConfig, MaxInboundMessage, ResolvedMaxAccount } from "./types.js";
+import { sendMaxCallbackAnswer, sendMaxText } from "./send.js";
+import type {
+  CoreConfig,
+  MaxCallbackEvent,
+  MaxInboundMessage,
+  ResolvedMaxAccount,
+} from "./types.js";
 
-export { normalizeMaxInboundMessage } from "./normalize.js";
+export { normalizeMaxCallbackEvent, normalizeMaxInboundMessage } from "./normalize.js";
 
 const CHANNEL_ID = "max-messenger" as const;
 
@@ -299,4 +304,44 @@ export async function handleMaxInbound(params: HandleMaxInboundParams): Promise<
           : undefined,
     },
   });
+}
+
+export type HandleMaxCallbackParams = {
+  event: MaxCallbackEvent;
+  account: ResolvedMaxAccount;
+  config: CoreConfig;
+  runtime: RuntimeEnv;
+  statusSink?: (patch: { lastInboundAt?: number; lastOutboundAt?: number }) => void;
+};
+
+/**
+ * Phase 3 message_callback handler.
+ *
+ * Acknowledges the press so the MAX client stops the spinner, records the
+ * inbound activity, and logs the payload. Real routing (approvalCapability
+ * native flow / actions adapter for in-message commands per plan §4) lands
+ * in Phase 3+ once we wire `approvalCapability`. For now the simpler "rely
+ * on text /approve" path from plan §6 Phase 3 keeps callbacks observable
+ * without forcing a UI surface decision.
+ */
+export async function handleMaxCallback(params: HandleMaxCallbackParams): Promise<void> {
+  const { event, account, config, runtime, statusSink } = params;
+  statusSink?.({ lastInboundAt: event.timestamp });
+  try {
+    await sendMaxCallbackAnswer({
+      cfg: config,
+      callbackId: event.callbackId,
+      accountId: account.accountId,
+    });
+    statusSink?.({ lastOutboundAt: Date.now() });
+  } catch (err) {
+    runtime.error?.(
+      `max-messenger: callback answer failed for ${event.callbackId}: ${String(err)}`,
+    );
+  }
+  runtime.log?.(
+    `max-messenger: callback ${event.callbackId} from ${event.senderId} (chat=${event.chatId}, payload=${
+      event.payload ?? "<absent>"
+    })`,
+  );
 }

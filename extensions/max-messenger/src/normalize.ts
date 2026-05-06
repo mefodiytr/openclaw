@@ -12,7 +12,7 @@
  * shape from `extensions/nextcloud-talk/src/normalize.ts`.
  */
 
-import type { MaxInboundMessage } from "./types.js";
+import type { MaxCallbackEvent, MaxInboundMessage } from "./types.js";
 
 const PREFIX_RE = /^(max-messenger|max):/iu;
 const INTEGER_RE = /^-?\d+$/u;
@@ -83,5 +83,53 @@ export function normalizeMaxInboundMessage(update: {
     timestamp: typeof message.timestamp === "number" ? message.timestamp : (update.timestamp ?? 0),
     isGroupChat,
     replyToMessageId: replyMid ?? undefined,
+  };
+}
+
+/**
+ * Normalize a `message_callback` update into the `MaxCallbackEvent` shape
+ * the dispatcher expects. Returns `null` when the update is not a callback
+ * with a usable callback_id / sender / chat reference.
+ *
+ * Pure function — no SDK imports.
+ */
+export function normalizeMaxCallbackEvent(update: {
+  update_type: string;
+  timestamp?: number;
+  callback?: {
+    callback_id?: string | null;
+    payload?: string | null;
+    timestamp?: number;
+    user?: { user_id?: number; first_name?: string; last_name?: string } | null;
+  } | null;
+  message?: {
+    recipient?: { chat_id?: number; chat_type?: string } | null;
+    body?: { mid?: string | null } | null;
+  } | null;
+}): MaxCallbackEvent | null {
+  if (update.update_type !== "message_callback" || !update.callback) {
+    return null;
+  }
+  const callback = update.callback;
+  const callbackId = callback.callback_id;
+  const userId = callback.user?.user_id;
+  const chatIdNum = update.message?.recipient?.chat_id;
+  if (!callbackId || typeof userId !== "number" || typeof chatIdNum !== "number") {
+    return null;
+  }
+  const firstName = trimToOptional(callback.user?.first_name);
+  const lastName = trimToOptional(callback.user?.last_name);
+  const senderName = [firstName, lastName].filter(Boolean).join(" ") || `user:${userId}`;
+  const chatType = update.message?.recipient?.chat_type ?? "dialog";
+  return {
+    callbackId,
+    payload: callback.payload ?? undefined,
+    senderId: String(userId),
+    senderName,
+    chatId: String(chatIdNum),
+    isGroupChat: chatType !== "dialog",
+    parentMessageId: update.message?.body?.mid ?? undefined,
+    timestamp:
+      typeof callback.timestamp === "number" ? callback.timestamp : (update.timestamp ?? 0),
   };
 }

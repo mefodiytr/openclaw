@@ -13,7 +13,10 @@ import {
 import { maxMessengerOutboundAdapter } from "./adapters/outbound.adapter.js";
 import { MaxConfigSchema } from "./config-schema.js";
 import { looksLikeMaxTargetId, normalizeMaxMessagingTarget } from "./normalize.js";
+import { resolveMaxGroupToolPolicy, resolveMaxRequireMention } from "./policy.js";
 import { collectRuntimeConfigAssignments, secretTargetRegistryEntries } from "./secret-contract.js";
+import { maxMessengerSetupAdapter } from "./setup-core.js";
+import { maxMessengerSetupWizard } from "./setup-surface.js";
 import type { ResolvedMaxAccount } from "./types.js";
 
 const meta = {
@@ -23,7 +26,7 @@ const meta = {
   detailLabel: "MAX bot",
   docsPath: "/channels/max-messenger",
   docsLabel: "max-messenger",
-  blurb: "Russian messenger MAX (by VK). Polling supervisor + agent reply pipeline (Phase 1B).",
+  blurb: "Russian messenger MAX (by VK). Polling + agent reply + inline keyboards (Phase 3).",
   aliases: ["max"],
   order: 70,
   markdownCapable: true,
@@ -32,17 +35,18 @@ const meta = {
 /**
  * MAX Messenger channel plugin.
  *
- * Phase 1A scaffolded the file layout. Phase 1B.1 added the custom polling
- * supervisor + HTTP wrapper; Phase 1B.2 added integration tests and config
- * schema wiring; Phase 1B.3 (this surface) wires the inbound dispatcher,
- * pairing controller, security DM resolver, and target normalization so the
- * agent reply pipeline (`dispatchInboundReplyWithBase`) routes
- * `message_created` events end-to-end.
+ * Phase 1A — file layout. Phase 1B (1B.1/1B.2/1B.3) — custom polling
+ * supervisor, HTTP wrapper, marker store, dedup cache, agent reply
+ * pipeline. Phase 3 (this surface) — outbound inline keyboards,
+ * `message_callback` acknowledgement, group helpers, interactive
+ * `openclaw onboard` wizard. Phase 2 (webhook transport) and native
+ * `approvalCapability` are deliberately deferred per plan §6.
  */
 export const maxMessengerPlugin: ChannelPlugin<ResolvedMaxAccount> = createChatChannelPlugin({
   base: {
     id: "max-messenger",
     meta,
+    setupWizard: maxMessengerSetupWizard,
     capabilities: {
       chatTypes: ["direct", "group"],
       reactions: false,
@@ -54,6 +58,10 @@ export const maxMessengerPlugin: ChannelPlugin<ResolvedMaxAccount> = createChatC
     reload: { configPrefixes: ["channels.max-messenger"] },
     configSchema: buildChannelConfigSchema(MaxConfigSchema),
     config: maxMessengerConfigAdapter,
+    groups: {
+      resolveRequireMention: resolveMaxRequireMention,
+      resolveToolPolicy: resolveMaxGroupToolPolicy,
+    },
     messaging: {
       targetPrefixes: ["max-messenger", "max"],
       normalizeTarget: normalizeMaxMessagingTarget,
@@ -66,11 +74,7 @@ export const maxMessengerPlugin: ChannelPlugin<ResolvedMaxAccount> = createChatC
       secretTargetRegistryEntries,
       collectRuntimeConfigAssignments,
     },
-    setup: {
-      // Phase 2 ships the interactive wizard; for now accept the input shape
-      // and return cfg as-is. The setup adapter is required by the SDK base.
-      applyAccountConfig: ({ cfg }) => cfg,
-    },
+    setup: maxMessengerSetupAdapter,
     gateway: maxMessengerGatewayAdapter,
   },
   pairing: {

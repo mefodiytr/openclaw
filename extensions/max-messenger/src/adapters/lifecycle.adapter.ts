@@ -19,7 +19,12 @@
 
 import type { ChannelGatewayContext, ChannelLogSink } from "openclaw/plugin-sdk/channel-contract";
 import { runStoppablePassiveMonitor } from "openclaw/plugin-sdk/extension-shared";
-import { handleMaxInbound, normalizeMaxInboundMessage } from "../inbound.js";
+import {
+  handleMaxCallback,
+  handleMaxInbound,
+  normalizeMaxCallbackEvent,
+  normalizeMaxInboundMessage,
+} from "../inbound.js";
 import {
   runMaxPollingSupervisor,
   type MaxPollingSupervisorResult,
@@ -105,8 +110,6 @@ function buildSupervisorDispatch(params: {
     if (update.update_type === "message_created") {
       const message = normalizeMaxInboundMessage(update);
       if (!message) {
-        // Malformed update payload — log via the skeleton for visibility but
-        // don't drag the agent pipeline through it.
         ctx.log?.warn?.(
           `[max-messenger:${account.accountId}] message_created without usable mid/chat/sender — dropping`,
         );
@@ -123,6 +126,30 @@ function buildSupervisorDispatch(params: {
       } catch (err) {
         ctx.log?.error?.(
           `[max-messenger:${account.accountId}] handleMaxInbound threw: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+      return;
+    }
+
+    if (update.update_type === "message_callback") {
+      const event = normalizeMaxCallbackEvent(update);
+      if (!event) {
+        ctx.log?.warn?.(
+          `[max-messenger:${account.accountId}] message_callback without usable callback_id / chat / user — dropping`,
+        );
+        return;
+      }
+      try {
+        await handleMaxCallback({
+          event,
+          account,
+          config: ctx.cfg as CoreConfig,
+          runtime: ctx.runtime,
+          statusSink,
+        });
+      } catch (err) {
+        ctx.log?.error?.(
+          `[max-messenger:${account.accountId}] handleMaxCallback threw: ${err instanceof Error ? err.message : String(err)}`,
         );
       }
       return;
