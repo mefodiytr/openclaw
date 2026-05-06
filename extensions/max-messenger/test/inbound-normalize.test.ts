@@ -15,6 +15,7 @@
 import { describe, expect, it } from "vitest";
 import {
   looksLikeMaxTargetId,
+  normalizeMaxInboundAttachments,
   normalizeMaxInboundMessage,
   normalizeMaxMessagingTarget,
 } from "../src/normalize.js";
@@ -167,6 +168,124 @@ describe("normalizeMaxInboundMessage", () => {
       },
     });
     expect(result?.text).toBe("");
+  });
+
+  it("lifts media attachments through to MaxInboundMessage.attachments", () => {
+    const result = normalizeMaxInboundMessage({
+      update_type: "message_created",
+      timestamp: 1,
+      message: {
+        sender: { user_id: 1, first_name: "A" },
+        recipient: { chat_id: 1, chat_type: "dialog" },
+        timestamp: 1,
+        body: {
+          mid: "msg-media",
+          text: "see this",
+          attachments: [
+            {
+              type: "image",
+              payload: { url: "https://cdn.max.ru/p/abc.jpg", token: "tk-abc" },
+            },
+          ],
+        },
+      },
+    });
+    expect(result?.attachments).toEqual([
+      {
+        type: "image",
+        url: "https://cdn.max.ru/p/abc.jpg",
+        token: "tk-abc",
+      },
+    ]);
+  });
+
+  it("omits attachments[] when none of the inbound payloads carry a URL", () => {
+    const result = normalizeMaxInboundMessage({
+      update_type: "message_created",
+      timestamp: 1,
+      message: {
+        sender: { user_id: 1, first_name: "A" },
+        recipient: { chat_id: 1, chat_type: "dialog" },
+        timestamp: 1,
+        body: { mid: "msg-x", text: "hi" },
+      },
+    });
+    expect(result?.attachments).toBeUndefined();
+  });
+});
+
+describe("normalizeMaxInboundAttachments", () => {
+  it("returns [] for missing / empty arrays", () => {
+    expect(normalizeMaxInboundAttachments(undefined)).toEqual([]);
+    expect(normalizeMaxInboundAttachments(null)).toEqual([]);
+    expect(normalizeMaxInboundAttachments([])).toEqual([]);
+  });
+
+  it("captures image / video / audio / file media URLs", () => {
+    const result = normalizeMaxInboundAttachments([
+      { type: "image", payload: { url: "https://cdn/p.jpg" } },
+      { type: "video", payload: { url: "https://cdn/v.mp4" }, duration: 12 },
+      { type: "audio", payload: { url: "https://cdn/a.ogg" } },
+      {
+        type: "file",
+        payload: { url: "https://cdn/f.pdf", token: "tk-f" },
+        filename: "report.pdf",
+        size: 4242,
+      },
+    ]);
+    expect(result).toEqual([
+      { type: "image", url: "https://cdn/p.jpg" },
+      { type: "video", url: "https://cdn/v.mp4", duration: 12 },
+      { type: "audio", url: "https://cdn/a.ogg" },
+      {
+        type: "file",
+        url: "https://cdn/f.pdf",
+        token: "tk-f",
+        fileName: "report.pdf",
+        size: 4242,
+      },
+    ]);
+  });
+
+  it("drops sticker / contact / share / location / inline_keyboard payloads", () => {
+    const result = normalizeMaxInboundAttachments([
+      { type: "sticker", payload: { url: "ignored" } },
+      { type: "contact", payload: { url: "ignored" } },
+      { type: "share", payload: { url: "ignored" } },
+      { type: "location", payload: { url: "ignored" } },
+      { type: "inline_keyboard", payload: { url: "ignored" } },
+      { type: "image", payload: { url: "https://cdn/keep.jpg" } },
+    ]);
+    expect(result).toEqual([{ type: "image", url: "https://cdn/keep.jpg" }]);
+  });
+
+  it("drops entries without a usable payload.url", () => {
+    const result = normalizeMaxInboundAttachments([
+      { type: "image", payload: { url: "" } },
+      { type: "video", payload: null },
+      { type: "image", payload: { url: "   " } },
+      { type: "audio", payload: { url: "https://cdn/a.ogg" } },
+    ]);
+    expect(result).toEqual([{ type: "audio", url: "https://cdn/a.ogg" }]);
+  });
+
+  it("preserves dimension / duration / thumbnail metadata when present", () => {
+    const result = normalizeMaxInboundAttachments([
+      {
+        type: "video",
+        payload: { url: "https://cdn/v.mp4" },
+        width: 1280,
+        height: 720,
+        duration: 30,
+        thumbnail: "https://cdn/thumb.jpg",
+      },
+    ]);
+    expect(result[0]).toMatchObject({
+      width: 1280,
+      height: 720,
+      duration: 30,
+      thumbnail: "https://cdn/thumb.jpg",
+    });
   });
 });
 

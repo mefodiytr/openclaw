@@ -113,7 +113,8 @@ export async function handleMaxInbound(params: HandleMaxInboundParams): Promise<
   });
 
   const rawBody = message.text?.trim() ?? "";
-  if (!rawBody) {
+  const attachments = message.attachments ?? [];
+  if (!rawBody && attachments.length === 0) {
     return;
   }
 
@@ -249,6 +250,8 @@ export async function handleMaxInbound(params: HandleMaxInboundParams): Promise<
     body: rawBody,
   });
 
+  const mediaUrls = attachments.map((a) => a.url);
+  const mediaTypes = attachments.map((a) => a.type);
   const ctxPayload = core.channel.reply.finalizeInboundContext({
     Body: body,
     BodyForAgent: rawBody,
@@ -272,6 +275,14 @@ export async function handleMaxInbound(params: HandleMaxInboundParams): Promise<
     OriginatingChannel: CHANNEL_ID,
     OriginatingTo: `max-messenger:${chatId}`,
     CommandAuthorized: commandAuthorized,
+    ...(mediaUrls.length > 0
+      ? {
+          MediaUrl: mediaUrls[0],
+          MediaUrls: mediaUrls,
+          MediaType: mediaTypes[0],
+          MediaTypes: mediaTypes,
+        }
+      : {}),
   });
 
   await dispatchInboundReplyWithBase({

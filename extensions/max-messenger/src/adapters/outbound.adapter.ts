@@ -1,27 +1,25 @@
 /**
- * Phase 1B.1+ outbound adapter.
+ * Outbound adapter for the MAX channel.
  *
- * `sendText` issues `POST /messages?chat_id=<n>` against MAX through the same
- * polling-http wrapper the supervisor uses (per docs/max-plugin/plan.md
- * §6.1.6: the wrapper is reused for non-polling MAX API calls). This gives
- * outbound the same `Retry-After` honoring, per-request timeout, and 401
- * classification as polling.
+ * Phase 1B.1 wired `sendText` through `polling-http` so the agent reply
+ * pipeline reaches MAX with the same Retry-After / 401 / per-request-timeout
+ * semantics as polling. Phase 4 wires `sendMedia` against the same wrapper:
+ * images with a public URL use MAX's URL shortcut, everything else flows
+ * through the two-step upload helpers in `attachments.ts`.
  *
- * `sendMedia` / `sendPoll` still throw — attachments and polls land in
- * Phase 4 / future phases.
+ * `sendPoll` still throws — polls are not on the plan today.
  */
 
 import { MAX_TEXT_CHUNK_LIMIT } from "../constants.js";
-import { sendMaxText } from "../send.js";
+import { sendMaxMedia, sendMaxText } from "../send.js";
 import type { CoreConfig } from "../types.js";
-
-const NOT_IMPLEMENTED_PHASE_1B = "not implemented in Phase 1B";
 
 export const maxMessengerOutboundAdapter = {
   base: {
     deliveryMode: "direct" as const,
     chunkerMode: "text" as const,
     textChunkLimit: MAX_TEXT_CHUNK_LIMIT,
+    extractMarkdownImages: true,
   },
   attachedResults: {
     channel: "max-messenger",
@@ -46,11 +44,50 @@ export const maxMessengerOutboundAdapter = {
         replyToId: replyToId ?? null,
       });
     },
-    sendMedia: async () => {
-      throw new Error(`max-messenger sendMedia: ${NOT_IMPLEMENTED_PHASE_1B}`);
+    sendMedia: async ({
+      cfg,
+      to,
+      accountId,
+      text,
+      mediaUrl,
+      mediaAccess,
+      mediaLocalRoots,
+      mediaReadFile,
+      replyToId,
+    }: {
+      cfg: unknown;
+      to: string;
+      accountId?: string | null;
+      text: string;
+      mediaUrl?: string;
+      mediaAccess?: Parameters<typeof sendMaxMedia>[0]["mediaAccess"];
+      mediaLocalRoots?: readonly string[];
+      mediaReadFile?: (filePath: string) => Promise<Buffer>;
+      replyToId?: string | null;
+    }) => {
+      if (!mediaUrl) {
+        return sendMaxText({
+          cfg: cfg as CoreConfig,
+          to,
+          accountId: accountId ?? null,
+          text,
+          replyToId: replyToId ?? null,
+        });
+      }
+      return sendMaxMedia({
+        cfg: cfg as CoreConfig,
+        to,
+        accountId: accountId ?? null,
+        text,
+        mediaUrl,
+        replyToId: replyToId ?? null,
+        ...(mediaAccess ? { mediaAccess } : {}),
+        ...(mediaLocalRoots ? { mediaLocalRoots } : {}),
+        ...(mediaReadFile ? { mediaReadFile } : {}),
+      });
     },
     sendPoll: async () => {
-      throw new Error(`max-messenger sendPoll: ${NOT_IMPLEMENTED_PHASE_1B}`);
+      throw new Error("max-messenger sendPoll: not implemented");
     },
   },
 };

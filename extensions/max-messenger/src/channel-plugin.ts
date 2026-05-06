@@ -26,7 +26,8 @@ const meta = {
   detailLabel: "MAX bot",
   docsPath: "/channels/max-messenger",
   docsLabel: "max-messenger",
-  blurb: "Russian messenger MAX (by VK). Polling + agent reply + inline keyboards (Phase 3).",
+  blurb:
+    "Russian messenger MAX (by VK). Polling + agent reply + inline keyboards + media attachments (Phase 4).",
   aliases: ["max"],
   order: 70,
   markdownCapable: true,
@@ -51,7 +52,7 @@ export const maxMessengerPlugin: ChannelPlugin<ResolvedMaxAccount> = createChatC
       chatTypes: ["direct", "group"],
       reactions: false,
       threads: false,
-      media: false,
+      media: true,
       nativeCommands: false,
       blockStreaming: true,
     },
