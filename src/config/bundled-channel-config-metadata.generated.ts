@@ -8524,7 +8524,7 @@ export const GENERATED_BUNDLED_CHANNEL_CONFIG_METADATA = [
     channelId: "max-messenger",
     label: "MAX",
     description:
-      "Russian messenger MAX (by VK). Phase 1A scaffolding only — polling lands in Phase 1B.",
+      "Russian messenger MAX (by VK). Polling, multi-account, agent reply, inline keyboards, media attachments, native pairing.",
     schema: {
       $schema: "http://json-schema.org/draft-07/schema#",
       type: "object",

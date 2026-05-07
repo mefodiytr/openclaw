@@ -1,36 +1,33 @@
 # @openclaw/max-messenger
 
-OpenClaw bundled channel plugin for [MAX](https://max.ru/) — the Russian messenger by VK.
+OpenClaw bundled channel plugin for [MAX](https://max.ru/) — the Russian
+messenger by VK.
 
-> **Phase 1A scaffolding.** This package only ships the plugin skeleton:
-> manifests, the `channels.max-messenger` Zod schema, the `ChannelPlugin`
-> assembly, token resolution, and adapter stubs. There is no polling supervisor,
-> no inbound dispatch, and no real outbound delivery yet — `start()` logs a
-> single line and returns; `sendText` records a placeholder and returns a stub
-> message id; `sendMedia` and `sendPoll` throw.
->
-> The polling supervisor (custom HTTP wrapper, marker store, dedup LRU,
-> fake-MAX harness) lands in **Phase 1B** per
-> [`docs/max-plugin/plan.md`](../../docs/max-plugin/plan.md) §6 Phase 1B and
-> §6.1.6.
+Polling transport, multi-account, native pairing, agent reply pipeline,
+inline keyboards, message_callback ack, and media attachments
+(image / video / audio / file) are all wired up. Webhook transport (Phase 2)
+remains deferred per
+[`docs/max-plugin/plan.md`](../../docs/max-plugin/plan.md) §6.
 
 ## Status by phase
 
-| Phase | Scope                                     | Status       |
-| ----- | ----------------------------------------- | ------------ |
-| 1A    | Scaffolding (manifests, schema, adapters) | this package |
-| 1B    | Polling supervisor + fake-MAX harness     | next         |
-| 1C    | Manual smoke against a real bot           | post-token   |
-| 2     | Webhook transport                         | future       |
-| 3     | Callback buttons / inline keyboard        | future       |
-| 4     | Attachments                               | future       |
-| 5     | Multi-account + standalone npm release    | future       |
+| Phase | Scope                                                 | Status   |
+| ----- | ----------------------------------------------------- | -------- |
+| 1A    | Scaffolding (manifests, schema, adapters)             | shipped  |
+| 1B    | Polling supervisor + fake-MAX harness                 | shipped  |
+| 1B.3  | Inbound dispatcher + agent reply pipeline             | shipped  |
+| 2     | Webhook transport                                     | deferred |
+| 3     | Inline keyboards + `message_callback` + group helpers | shipped  |
+| 4     | Media attachments (send + receive)                    | shipped  |
+| 5     | Multi-account hardening + standalone npm release      | this PR  |
+| 6     | Test sweep (per-file unit + e2e)                      | next     |
 
 ## Configuring the channel
 
-The channel is registered with id `max-messenger` (alias `max`). All Phase 1A
-config keys live under `channels.max-messenger.*`. Only `dmPolicy: "pairing"`
-and the token resolution path are exercised at this point.
+The channel is registered with id `max-messenger` (alias `max`). All config
+keys live under `channels.max-messenger.*`.
+
+### Single-account (default)
 
 ```jsonc
 {
@@ -50,18 +47,63 @@ and the token resolution path are exercised at this point.
 ```
 
 The `MAX_BOT_TOKEN` env variable is honored as a fallback for the default
-account, mirroring `TELEGRAM_BOT_TOKEN`.
+account only (mirrors `TELEGRAM_BOT_TOKEN`).
 
-## Phase 1A behavior
+### Multi-account
 
-- `openclaw channels list` shows MAX with the right metadata.
-- Schema validation rejects malformed `channels.max-messenger.*` blocks.
-- Starting the gateway emits one log line per account and exits cleanly on
-  shutdown.
-- No outbound network calls are issued; no inbound MAX events are processed.
+Each account gets its own polling supervisor, dedup cache, and persisted
+marker file (`~/.openclaw/state/channels/max-messenger/<accountId>.json`).
+Top-level fields apply to every account unless overridden inside
+`accounts.<id>`.
+
+```jsonc
+{
+  "channels": {
+    "max-messenger": {
+      // Top-level defaults inherited by all accounts.
+      "transport": "polling",
+      "dmPolicy": "pairing",
+
+      "defaultAccount": "support",
+      "accounts": {
+        "support": {
+          "name": "BCAi support bot",
+          "tokenFile": "~/.openclaw/credentials/max-support.token",
+          "allowFrom": ["12345678", "87654321"],
+        },
+        "ops": {
+          "name": "BCAi ops bot",
+          "tokenFile": "~/.openclaw/credentials/max-ops.token",
+          "allowFrom": ["55555555"],
+        },
+        "stale": {
+          // Disabled accounts are skipped at gateway start without erroring.
+          "enabled": false,
+          "tokenFile": "~/.openclaw/credentials/max-old.token",
+        },
+      },
+    },
+  },
+}
+```
+
+`openclaw channels logout max-messenger --account <id>` removes the persisted
+token and the marker file (so a future start with a fresh token cannot replay
+events the rotated bot saw).
+
+## Secrets
+
+`secret-contract.ts` registers two target paths so `openclaw secrets set` and
+the doctor can find them:
+
+- `channels.max-messenger.token` (default account)
+- `channels.max-messenger.accounts.<id>.token` (per-account)
+
+Use `tokenFile` for production; the SDK secret-file runtime rejects symlinks
+and only reads files inside `~/.openclaw/credentials/`.
 
 ## References
 
 - Implementation plan: [`docs/max-plugin/plan.md`](../../docs/max-plugin/plan.md)
 - Project context: [`docs/max-plugin/CONTEXT.md`](../../docs/max-plugin/CONTEXT.md)
-- Upstream stability check: [`docs/max-plugin/upstream-sync-2026.5.2.md`](../../docs/max-plugin/upstream-sync-2026.5.2.md)
+- Upstream sync runbook: [`docs/max-plugin/UPSTREAM-SYNC.md`](../../docs/max-plugin/UPSTREAM-SYNC.md)

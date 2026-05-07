@@ -18,6 +18,7 @@
  */
 
 import type { ChannelGatewayContext, ChannelLogSink } from "openclaw/plugin-sdk/channel-contract";
+import { createAccountStatusSink } from "openclaw/plugin-sdk/channel-lifecycle";
 import { runStoppablePassiveMonitor } from "openclaw/plugin-sdk/extension-shared";
 import {
   handleMaxCallback,
@@ -102,10 +103,13 @@ function buildSupervisorDispatch(params: {
 }): (update: PollingUpdate) => Promise<void> {
   const { ctx, inboundCtx } = params;
   const account = ctx.account;
-  const statusSink = (patch: { lastInboundAt?: number; lastOutboundAt?: number }): void => {
-    const snapshot = ctx.getStatus();
-    ctx.setStatus({ ...snapshot, ...patch });
-  };
+  // Per-account snapshot helper from the SDK. Centralizes the
+  // `{ accountId, ...patch }` merge so per-message updates stay tiny and
+  // mistake-proof when more accounts come online (Phase 5).
+  const statusSink = createAccountStatusSink({
+    accountId: account.accountId,
+    setStatus: ctx.setStatus,
+  });
   return async (update) => {
     if (update.update_type === "message_created") {
       const message = normalizeMaxInboundMessage(update);
@@ -178,6 +182,15 @@ function buildSupervisorDispatch(params: {
 export const maxMessengerLifecycleAdapter = {
   async start(ctx: ChannelGatewayContext<ResolvedMaxAccount>): Promise<void> {
     const account = ctx.account;
+    if (!account.enabled) {
+      // Multi-account: an explicitly disabled account is a no-op so the gateway
+      // can keep iterating siblings without erroring. Mirrors the
+      // nextcloud-talk + telegram convention.
+      ctx.log?.info?.(
+        `[max-messenger:${account.accountId}] account disabled in config (enabled: false) — skipping polling`,
+      );
+      return;
+    }
     if (!account.token) {
       throw new Error(
         `MAX Messenger: token missing for account "${account.accountId}". ` +
@@ -196,6 +209,10 @@ export const maxMessengerLifecycleAdapter = {
     };
     const dispatch = buildSupervisorDispatch({ ctx, inboundCtx });
     const tunables = resolvePollingTunables(account.config.polling);
+    const accountStatus = createAccountStatusSink({
+      accountId: account.accountId,
+      setStatus: ctx.setStatus,
+    });
 
     pollingLogger.info("max-messenger.polling.start", {
       apiRoot: account.apiRoot,
@@ -235,9 +252,7 @@ export const maxMessengerLifecycleAdapter = {
               pollingLogger.error("max-messenger.polling.fatal.surface_status", {
                 accountId: account.accountId,
               });
-              const snapshot = ctx.getStatus();
-              ctx.setStatus({
-                ...snapshot,
+              accountStatus({
                 running: false,
                 tokenStatus: "unauthorized",
                 lastError: "MAX bot token rejected by API (HTTP 401).",

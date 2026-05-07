@@ -35,7 +35,7 @@
       "detailLabel": "MAX bot",
       "docsPath": "/channels/max-messenger",
       "docsLabel": "max-messenger",
-      "blurb": "Russian messenger MAX (by VK). Phase 1A scaffolding only — polling lands in Phase 1B.",
+      "blurb": "Russian messenger MAX (by VK). Polling, multi-account, agent reply, inline keyboards, media attachments, native pairing.",
       "aliases": [
         "max"
       ],
@@ -48,6 +48,9 @@
           ]
         }
       }
+    },
+    "install": {
+      "npmSpec": "@bccontrol/openclaw-max-messenger"
     },
     "compat": {
       "pluginApi": ">=2026.5.3"
