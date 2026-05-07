@@ -151,6 +151,27 @@ export type MaxEvent = {
   payload?: Record<string, any>;
 };
 
+/**
+ * Inbound media-bearing attachment surfaced through the dispatch pipeline.
+ *
+ * MAX wire payloads carry `payload.url` for `image | video | audio | file`,
+ * plus `payload.token` (for re-sending) and a few type-specific fields.
+ * Sticker / contact / share / location / inline_keyboard are deliberately
+ * dropped during normalize — they don't map cleanly to `MediaUrls` and the
+ * agent reply pipeline only consumes URL/file inputs.
+ */
+export type MaxInboundAttachment = {
+  type: "image" | "video" | "audio" | "file";
+  url: string;
+  token?: string;
+  fileName?: string;
+  size?: number;
+  width?: number;
+  height?: number;
+  duration?: number;
+  thumbnail?: string;
+};
+
 /** Normalized inbound message — produced by `normalizeMaxInboundMessage`. */
 export type MaxInboundMessage = {
   messageId: string;
@@ -162,6 +183,8 @@ export type MaxInboundMessage = {
   timestamp: number;
   isGroupChat: boolean;
   replyToMessageId?: string;
+  /** Media-bearing attachments (image / video / audio / file). Empty when none. */
+  attachments?: MaxInboundAttachment[];
 };
 
 /** @deprecated Use {@link MaxInboundMessage}. Kept for transitional callers. */

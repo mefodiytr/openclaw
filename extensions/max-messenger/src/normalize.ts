@@ -12,7 +12,7 @@
  * shape from `extensions/nextcloud-talk/src/normalize.ts`.
  */
 
-import type { MaxCallbackEvent, MaxInboundMessage } from "./types.js";
+import type { MaxCallbackEvent, MaxInboundAttachment, MaxInboundMessage } from "./types.js";
 
 const PREFIX_RE = /^(max-messenger|max):/iu;
 const INTEGER_RE = /^-?\d+$/u;
@@ -36,6 +36,76 @@ function trimToOptional(value: string | null | undefined): string | undefined {
   return trimmed === "" ? undefined : trimmed;
 }
 
+const MEDIA_ATTACHMENT_TYPES = new Set(["image", "video", "audio", "file"]);
+
+type RawAttachment = {
+  type?: string;
+  payload?: { url?: string; token?: string } | null;
+  filename?: string;
+  size?: number;
+  width?: number;
+  height?: number;
+  duration?: number;
+  thumbnail?: string | null;
+};
+
+/**
+ * Lift media-bearing attachments out of the raw `message.body.attachments[]`
+ * array. Sticker / contact / share / location / inline_keyboard fall through
+ * untouched (the agent reply pipeline has no URL to consume for them).
+ */
+export function normalizeMaxInboundAttachments(
+  raw: ReadonlyArray<RawAttachment> | null | undefined,
+): MaxInboundAttachment[] {
+  if (!Array.isArray(raw) || raw.length === 0) {
+    return [];
+  }
+  const out: MaxInboundAttachment[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object") {
+      continue;
+    }
+    const type = entry.type;
+    if (typeof type !== "string" || !MEDIA_ATTACHMENT_TYPES.has(type)) {
+      continue;
+    }
+    const url = trimToOptional(entry.payload?.url);
+    if (!url) {
+      continue;
+    }
+    const attachment: MaxInboundAttachment = {
+      type: type as MaxInboundAttachment["type"],
+      url,
+    };
+    const token = trimToOptional(entry.payload?.token);
+    if (token) {
+      attachment.token = token;
+    }
+    const fileName = trimToOptional(entry.filename);
+    if (fileName) {
+      attachment.fileName = fileName;
+    }
+    if (typeof entry.size === "number" && Number.isFinite(entry.size)) {
+      attachment.size = entry.size;
+    }
+    if (typeof entry.width === "number" && Number.isFinite(entry.width)) {
+      attachment.width = entry.width;
+    }
+    if (typeof entry.height === "number" && Number.isFinite(entry.height)) {
+      attachment.height = entry.height;
+    }
+    if (typeof entry.duration === "number" && Number.isFinite(entry.duration)) {
+      attachment.duration = entry.duration;
+    }
+    const thumbnail = trimToOptional(entry.thumbnail ?? null);
+    if (thumbnail) {
+      attachment.thumbnail = thumbnail;
+    }
+    out.push(attachment);
+  }
+  return out;
+}
+
 /**
  * Normalize a raw `PollingUpdate` from the supervisor into the
  * `MaxInboundMessage` shape the dispatcher expects. Returns `null` when the
@@ -51,7 +121,11 @@ export function normalizeMaxInboundMessage(update: {
     sender?: { user_id?: number; first_name?: string; last_name?: string } | null;
     recipient?: { chat_id?: number; chat_type?: string } | null;
     timestamp?: number;
-    body?: { mid?: string | null; text?: string | null } | null;
+    body?: {
+      mid?: string | null;
+      text?: string | null;
+      attachments?: ReadonlyArray<RawAttachment> | null;
+    } | null;
     link?: { type?: string; message?: { mid?: string } } | null;
   } | null;
 }): MaxInboundMessage | null {
@@ -73,7 +147,8 @@ export function normalizeMaxInboundMessage(update: {
   const senderName = [firstName, lastName].filter(Boolean).join(" ") || `user:${senderUserId}`;
   const replyMid =
     message.link && message.link.type === "reply" ? message.link.message?.mid : undefined;
-  return {
+  const attachments = normalizeMaxInboundAttachments(message.body?.attachments);
+  const result: MaxInboundMessage = {
     messageId: mid,
     chatId: String(chatIdNum),
     chatTitle: undefined,
@@ -84,6 +159,10 @@ export function normalizeMaxInboundMessage(update: {
     isGroupChat,
     replyToMessageId: replyMid ?? undefined,
   };
+  if (attachments.length > 0) {
+    result.attachments = attachments;
+  }
+  return result;
 }
 
 /**
